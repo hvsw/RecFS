@@ -7,7 +7,8 @@
 Função:	Informa a identificação dos desenvolvedores do T2FS.
 -----------------------------------------------------------------------------*/
 int identify2 (char *name, int size) {
-	return -1;
+    strncpy (name, "Álvaro Souza - \nHenrique Valcanaia - \nLucas Bauer - 237054\nLucas Lauck - \n", size);
+    return 0;
 }
 
 /*-----------------------------------------------------------------------------
