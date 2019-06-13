@@ -2,6 +2,22 @@
 /**
 */
 #include "t2fs.h"
+#include <stdio.h>
+#include "sys/fcntl.h"
+
+#define MAX_FILES 1000
+char *files[MAX_FILES];
+
+#define SECTOR_SIZE 256
+#define SECTORS_PER_BLOCK 256
+#define DISK_FILE "../t2fs_disk.dat"
+
+// TODO: Esse valor talvez seja um pouco grande,
+// foi escolhido esse pois geralmente arquivos de audio
+// em gravação tem um tamanho consideravel, sendo dificil
+// encontrar arquivos muito pequenos, acredito que poderiamos
+// ate aumentar pra sei la 1MB.
+#define BLOCK_SIZE SECTOR_SIZE * SECTORS_PER_BLOCK  // 64KB
 
 /*-----------------------------------------------------------------------------
 Função:	Informa a identificação dos desenvolvedores do T2FS.
@@ -57,7 +73,22 @@ Função:	Função usada para realizar a leitura de uma certa quantidade
 		de bytes (size) de um arquivo.
 -----------------------------------------------------------------------------*/
 int read2 (FILE2 handle, char *buffer, int size) {
-	return -1;
+    return -1;
+    
+    FILE *diskFile = fopen(DISK_FILE, O_RDONLY);
+    
+    // TODO: Encontrar o primeiro bloco do arquivo
+    int fileFirstBlock = 0;
+    fseek(diskFile, fileFirstBlock, SEEK_SET);
+    
+    int numberOfSectorsToRead = size / SECTOR_SIZE;
+    int remainder = size % SECTOR_SIZE;
+    if (remainder != 0) { numberOfSectorsToRead++; }
+    
+    unsigned long bytesRead = fread(buffer, SECTOR_SIZE, numberOfSectorsToRead, diskFile);
+    
+    fclose(diskFile);
+    return (int) bytesRead;
 }
 
 /*-----------------------------------------------------------------------------
