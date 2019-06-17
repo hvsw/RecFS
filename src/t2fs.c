@@ -20,6 +20,16 @@ char *files[MAX_FILES];
 // ate aumentar pra sei la 1MB.
 #define BLOCK_SIZE SECTOR_SIZE * SECTORS_PER_BLOCK  // 64KB
 
+typedef struct
+{
+	//lista de partições?
+	//lista de setores?
+	//dentro de setores lista de blocos?
+	//dentro de blocos lista de arquivos ou diretorios?
+} disk;
+
+int diskInitialized = 0;
+
 /*-----------------------------------------------------------------------------
 Função:	Informa a identificação dos desenvolvedores do T2FS.
 -----------------------------------------------------------------------------*/
@@ -34,6 +44,29 @@ Função:	Formata logicamente o disco virtual t2fs_disk.dat para o sistema de
 		corresponde a um múltiplo de setores dados por sectors_per_block.
 -----------------------------------------------------------------------------*/
 int format2 (int sectors_per_block) {
+	if(!diskInitialized){
+		FILE *arq;
+		arq = fopen("../t2fs_disk.dat", "r+");
+
+		if(arq == NULL)
+			printf("problemas na abertura do arquivo de disco\n");
+
+		fseek(arq, 0, SEEK_SET);
+
+		char buffer[2];
+
+		unsigned long bytesRead = fread(buffer, 1, 2, arq);
+
+		printf("numero de bytes lidos: %lu\n", bytesRead);
+		printf("o que foi lido: %s\n", buffer);
+
+	return 0;
+		
+
+//unsigned long bytesRead = fread(buffer, SECTOR_SIZE, numberOfSectorsToRead, diskFile);
+		// inicializar partição MBR
+		// inicializar disco já lendo do arquivo os bytes zerados
+	}
 	return -1;
 }
 
