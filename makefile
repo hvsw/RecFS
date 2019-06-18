@@ -1,28 +1,29 @@
-#
-# Makefile ESQUELETO
-#
-# DEVE ter uma regra "all" para geração da biblioteca
-# regra "clean" para remover todos os objetos gerados.
-#
-# NECESSARIO adaptar este esqueleto de makefile para suas necessidades.
-#
-# 
 
-CC=gcc
+CC=gcc -g -w
 LIB_DIR=./lib
 INC_DIR=./include
 BIN_DIR=./bin
 SRC_DIR=./src
+TST_DIR=./teste
 EXM_DIR=./exemplo
 
-all: fs
-	ar crs $(LIB_DIR)/libt2fs.a  $(BIN_DIR)/t2fs.o $(LIB_DIR)/apidisk.o
 
-fs:
-	$(CC) -c $(SRC_DIR)/t2fs.c -o $(BIN_DIR)/t2fs.o -Wall
+all: objetos mvObjetos libt2fs.a mvLib shell
 
-shell: all
-	$(CC) -o t2shell $(EXM_DIR)/t2shell.c -L$(LIB_DIR) -lt2fs.a -Wall
+objetos: $(SRC_DIR)/t2fs.c $(INC_DIR)/t2fs.h
+	$(CC) -c $(SRC_DIR)/t2fs.c -Wall
+
+mvObjetos:
+	mv *.o $(BIN_DIR)
+
+libt2fs.a: 
+	ar crs libt2fs.a $(BIN_DIR)/*.o $(LIB_DIR)/*.o
+
+mvLib:
+	mv *.a $(LIB_DIR)
+
+shell:
+	$(CC) -o t2shell $(EXM_DIR)/t2shell.c -L$(LIB_DIR) -lt2fs
 
 clean:
-	rm -rf $(LIB_DIR)/*.a $(BIN_DIR)/*.o $(EXM_DIR)/*.o $(SRC_DIR)/*~ $(INC_DIR)/*~ *~
+	rm -rf t2shell $(LIB_DIR)/*.a $(BIN_DIR)/t2fs.o  $(TST_DIR)/*.o $(SRC_DIR)/*~
