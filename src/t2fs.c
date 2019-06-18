@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <errno.h>
 #include "sys/fcntl.h"
+#include "../include/apidisk.h"
+
 
 #define MAX_FILES 1000
 char *files[MAX_FILES];
@@ -14,24 +16,27 @@ char *files[MAX_FILES];
 #define SECTORS_PER_BLOCK 256
 #define DISK_FILE "../t2fs_disk.dat"
 
+#define VERSION 0x7E31
+
+/** Superbloco */
+typedef struct  {
+    WORD    version;
+    WORD    sectorSize;
+    WORD    partitionTableStart;
+    WORD    partitionCount;
+    DWORD   partitionStart; // temos apenas 1 particao
+    DWORD   partitionEnd;
+    char    partitionName[24];
+} t2fs_disk;
+
+t2fs_disk *superblock;
+
+
 //typedef unsigned char BYTE;
 //typedef unsigned short int WORD;
 //typedef unsigned int DWORD;
 
 #pragma pack(push, 1)
-
-/** Superbloco */
-typedef struct  {
-	//char    buffer[4];          
-	char    version[2];        	/* Vers�o atual desse sistema de arquivos: (valor fixo 0x7E3=2019; 1=1� semestre). */
-	//WORD    superblockSize; 	/* Quantidade de setores l�gicos que formam o superbloco. (fixo em 1 setor) */
-	DWORD	DiskSize;			/* Tamanho total, em bytes, da parti��o T2FS. Inclui o superbloco, a �rea de FAT e os clusters de dados. */
-	DWORD	NofSectors;			/* Quantidade total de setores l�gicos da parti��o T2FS. Inclui o superbloco, a �rea de FAT e os clusters de dados. */
-	DWORD	SectorsPerCluster;	/* N�mero de setores l�gicos que formam um cluster. */
-	DWORD	pFATSectorStart;	/* N�mero do setor l�gico onde a FAT inicia. */
-	DWORD	RootDirCluster;		/* Cluster onde inicia o arquivo correspon-dente ao diret�rio raiz */
-	DWORD	DataSectorStart;	/* Primeiro setor l�gico da �rea de blocos de dados (cluster 0). */
-} t2fs_disk;
 
 // TODO: Esse valor talvez seja um pouco grande,
 // foi escolhido esse pois geralmente arquivos de audio
@@ -55,43 +60,58 @@ Função:	Formata logicamente o disco virtual t2fs_disk.dat para o sistema de
 		arquivos T2FS definido usando blocos de dados de tamanho
 		corresponde a um múltiplo de setores dados por sectors_per_block.
 -----------------------------------------------------------------------------*/
+
+
+void show_superblock_info() {
+    printf("%s\n", __PRETTY_FUNCTION__);
+    printf("Version: 0x%x\n", superblock->version);
+    printf("Sector size: 0x%x\n", superblock->sectorSize);
+    printf("Partition table start: 0x%x\n", superblock->partitionTableStart);
+    printf("Partition count: 0x%x\n", superblock->partitionCount);
+    printf("Partition start: 0x%x\n", superblock->partitionStart);
+    printf("Partition end: 0x%x\n", superblock->partitionEnd);
+    printf("Partition name: %s\n", superblock->partitionName);
+}
+
+static void init_t2fs() {
+    unsigned char buffer[SECTOR_SIZE];
+    
+    if (read_sector(0, buffer)) {
+        printf("Erro ao ler o superbloco. O arquivo '%s' esta no caminho certo?\n", DISK_FILE);
+        exit(-1);
+    }
+    
+    superblock = malloc(sizeof(*superblock));
+    
+    /* offset 0 bytes */
+    superblock->version = *((WORD *)(buffer + 0));
+    if (superblock->version != VERSION) {
+        printf("Versão do sistema de arquivos não suportada!\nEsperado: %d\nEncontrado: 0x%hu\n", VERSION, superblock->version);
+        exit(-2);
+    }
+
+    superblock->sectorSize = *((WORD *)(buffer + 2));
+    superblock->partitionTableStart = *((WORD *)(buffer + 4));
+    superblock->partitionCount = *((WORD *)(buffer + 6));
+    superblock->partitionStart = *((DWORD *)(buffer + 8));
+    superblock->partitionEnd = *((DWORD *)(buffer + 12));
+    superblock->partitionStart = *((DWORD *)(buffer + 8));
+    strncpy(superblock->partitionName, buffer+16, 24);
+    
+    // Se quiser ver o que esta sendo inicializado basta chamar a funcao abaixo
+    // show_superblock_info();
+}
+
+
 int format2 (int sectors_per_block) {
-	if(!diskInitialized){
-		t2fs_disk disco;
-		diskInitialized = 1;
-		FILE *arq;
-		arq = fopen("/home/aluno/shared/t2fs_disk.dat", "r");
-
-		if(arq == NULL){
-			printf("problemas na abertura do arquivo de disco %d\n", errno);
-			return -1;
-		}
-
-		fseek(arq, 0, SEEK_SET); //aponta ponteiro para inicio do arquivo
-
-		char buffer[2];
-
-		unsigned long bytesRead = fread(buffer, 1, 2, arq);
-
-		printf("numero de bytes lidos: %lu\n", bytesRead);
-
-		//int i;
-		//for (i = 0; i < 1; ++i)
-		//{
-			//disco.version = buffer[i];
-			printf("o que foi lido: %02X\n", buffer[0]);
-			printf("o que foi lido: %02X\n", buffer[1]);
-		//}
-
-		strncpy(disco.version, buffer, sizeof(disco.version));
-
-
-
-		printf("valor da versão salvo no disco %02X\n", disco.version[0]);
-		printf("valor da versão salvo no disco %02X\n", disco.version[1]);
-	return 0;
-	}
-	return -1;
+	if (!diskInitialized) {
+        init_t2fs();
+    }
+    
+    // TODO: Formatar o disco escrevendo com write_sector
+    // Sugestao: popula a struct t2fs_disk e escreve ela toda no disco direto.
+    
+    return -1;
 }
 
 /*-----------------------------------------------------------------------------
