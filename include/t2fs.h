@@ -17,11 +17,7 @@ typedef unsigned int DWORD;
 
 #pragma pack(push, 1)
 
-<<<<<<< HEAD
-/** Registro com as informaï¿½ï¿½es da entrada de diretï¿½rio, lida com readdir2 */
-=======
 /** Registro com as informações da entrada de diretório, lida com readdir2 */
->>>>>>> parent of 0fb434f... Merge remote-tracking branch 'origin/master'
 #define MAX_FILE_NAME_SIZE 255
 typedef struct {
     char    name[MAX_FILE_NAME_SIZE+1]; /* Nome do arquivo cuja entrada foi lida do disco      */
@@ -296,11 +292,5 @@ Saída:	Se a operação foi realizada com sucesso, a função retorna "0" (zero).
 	Em caso de erro, será retornado um valor diferente de zero.
 -----------------------------------------------------------------------------*/
 int ln2(char *linkname, char *filename);
-
-
-
-
-
-
 
 #endif
