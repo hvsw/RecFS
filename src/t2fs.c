@@ -14,6 +14,13 @@ char *files[MAX_FILES];
 
 #define SECTOR_SIZE 256
 #define SECTORS_PER_BLOCK 256
+// TODO: Esse valor talvez seja um pouco grande,
+// foi escolhido esse pois geralmente arquivos de audio
+// em gravação tem um tamanho consideravel, sendo dificil
+// encontrar arquivos muito pequenos, acredito que poderiamos
+// ate aumentar pra sei la 1MB.
+#define BLOCK_SIZE SECTOR_SIZE * SECTORS_PER_BLOCK  // 64KB
+
 #define DISK_FILE "../t2fs_disk.dat"
 
 #define VERSION 0x7E31
@@ -37,13 +44,6 @@ t2fs_disk *superblock;
 //typedef unsigned int DWORD;
 
 #pragma pack(push, 1)
-
-// TODO: Esse valor talvez seja um pouco grande,
-// foi escolhido esse pois geralmente arquivos de audio
-// em gravação tem um tamanho consideravel, sendo dificil
-// encontrar arquivos muito pequenos, acredito que poderiamos
-// ate aumentar pra sei la 1MB.
-#define BLOCK_SIZE SECTOR_SIZE * SECTORS_PER_BLOCK  // 64KB
 
 int diskInitialized = 0;
 
@@ -73,6 +73,8 @@ void show_superblock_info() {
     printf("Partition name: %s\n", superblock->partitionName);
 }
 
+int debug = 1;
+
 static void init_t2fs() {
     unsigned char buffer[SECTOR_SIZE];
     
@@ -95,23 +97,88 @@ static void init_t2fs() {
     superblock->partitionCount = *((WORD *)(buffer + 6));
     superblock->partitionStart = *((DWORD *)(buffer + 8));
     superblock->partitionEnd = *((DWORD *)(buffer + 12));
-    superblock->partitionStart = *((DWORD *)(buffer + 8));
     strncpy(superblock->partitionName, buffer+16, 24);
     
     // Se quiser ver o que esta sendo inicializado basta chamar a funcao abaixo
-    // show_superblock_info();
+    if (debug) {
+        show_superblock_info();
+    }
+}
+
+void superblockToBuffer(unsigned char *buffer) {
+    memset(buffer, 0, sizeof(buffer));
+    
+    sprintf(buffer,    "0x%x", VERSION);
+    sprintf(buffer+2,  "0x%x", SECTOR_SIZE);
+    sprintf(buffer+4,  "0x%x", superblock->partitionTableStart);
+    sprintf(buffer+6,  "0x%x", superblock->partitionCount);
+    sprintf(buffer+8,  "0x%x", superblock->partitionStart);
+    sprintf(buffer+12, "0x%x", superblock->partitionEnd);
+    sprintf(buffer+16, "0x%x", superblock->partitionName);
+}
+
+int _format2() {
+    int superblockSize = 40, dataAreaSize = BLOCK_SIZE, dirTreeSize, bitmapSize;
+    int diskSize = superblockSize + dataAreaSize + dirTreeSize + bitmapSize;
+    superblock->version = VERSION; // just in case...
+    superblock->sectorSize = 0x100; // 0d256
+    superblock->partitionTableStart = 0x8;
+    superblock->partitionCount = 0x1;
+    superblock->partitionStart = 0x28; // 0d40
+    
+    int lastBlockAddress = diskSize - superblock->partitionStart - bitmapSize - dirTreeSize;
+    superblock->partitionEnd = lastBlockAddress;
+    
+    int partitionNameSize = 24;
+    unsigned char buffer[partitionNameSize];
+    strncpy("PART_SEM_QUE_VEM", superblock->partitionName, sizeof(buffer));
+    
+    unsigned char superblockData[SECTOR_SIZE];
+    superblockToBuffer(superblockData);
+    
+    int writeResult = write_sector(0, superblockData);
+    if (writeResult < 0) {
+        return writeResult;
+    }
+    
+    return 0;
+}
+
+int wipeDisk() {
+    unsigned char zeroFilledArray[SECTOR_SIZE];
+    memset(zeroFilledArray, 0, SECTOR_SIZE);
+    
+    int diskSize = 0;
+    int numberOfSectors = diskSize/SECTOR_SIZE;
+    int currentSector = 0;
+    for (currentSector = 0; currentSector < numberOfSectors; currentSector++) {
+        int writeResult = write_sector(currentSector, zeroFilledArray) < 0;
+        if (writeResult < 0) {
+            return writeResult;
+        }
+    }
+    
+    return 0;
 }
 
 
 int format2 (int sectors_per_block) {
 	if (!diskInitialized) {
         init_t2fs();
+        diskInitialized = 1;
     }
     
-    // TODO: Formatar o disco escrevendo com write_sector
-    // Sugestao: popula a struct t2fs_disk e escreve ela toda no disco direto.
+    int wipeDiskResult = wipeDisk();
+    if (wipeDiskResult < 0) {
+        return wipeDiskResult;
+    }
     
-    return -1;
+    int formatResult = _format2();
+    if (formatResult < 0) {
+        return formatResult;
+    }
+    
+    return 0;
 }
 
 /*-----------------------------------------------------------------------------
