@@ -21,6 +21,8 @@ char *files[MAX_FILES];
 // ate aumentar pra sei la 1MB.
 #define BLOCK_SIZE SECTOR_SIZE * SECTORS_PER_BLOCK  // 64KB
 
+#define BLOCK_COUNT 100
+
 #define DISK_FILE "../t2fs_disk.dat"
 
 #define VERSION 0x7E31
@@ -38,10 +40,7 @@ typedef struct  {
 
 t2fs_disk *superblock;
 
-
-//typedef unsigned char BYTE;
-//typedef unsigned short int WORD;
-//typedef unsigned int DWORD;
+int bitmap[BLOCK_COUNT];
 
 #pragma pack(push, 1)
 
@@ -62,7 +61,7 @@ Função:	Formata logicamente o disco virtual t2fs_disk.dat para o sistema de
 -----------------------------------------------------------------------------*/
 
 
-void show_superblock_info() {
+void showSuperblockInfo() {
     printf("%s\n", __PRETTY_FUNCTION__);
     printf("Version: 0x%x\n", superblock->version);
     printf("Sector size: 0x%x\n", superblock->sectorSize);
@@ -75,33 +74,40 @@ void show_superblock_info() {
 
 int debug = 1;
 
-static void init_t2fs() {
-    unsigned char buffer[SECTOR_SIZE];
-    
+static unsigned char readSector(unsigned char *buffer) {
     if (read_sector(0, buffer)) {
         printf("Erro ao ler o superbloco. O arquivo '%s' esta no caminho certo?\n", DISK_FILE);
         exit(-1);
     }
-    
-    superblock = malloc(sizeof(*superblock));
-    
-    /* offset 0 bytes */
-    superblock->version = *((WORD *)(buffer + 0));
+    return buffer;
+}
+
+void populateSuperblockWith(BYTE *buffer) {
+    superblock->version = *((WORD *)buffer);
     if (superblock->version != VERSION) {
         printf("Versão do sistema de arquivos não suportada!\nEsperado: %d\nEncontrado: 0x%hu\n", VERSION, superblock->version);
         exit(-2);
     }
-
+    
     superblock->sectorSize = *((WORD *)(buffer + 2));
     superblock->partitionTableStart = *((WORD *)(buffer + 4));
     superblock->partitionCount = *((WORD *)(buffer + 6));
     superblock->partitionStart = *((DWORD *)(buffer + 8));
     superblock->partitionEnd = *((DWORD *)(buffer + 12));
     strncpy(superblock->partitionName, buffer+16, 24);
-    
-    // Se quiser ver o que esta sendo inicializado basta chamar a funcao abaixo
+}
+
+void readSuperblock() {
+    BYTE buffer[SECTOR_SIZE];
+    readSector(buffer);
+    populateSuperblockWith(buffer);
+}
+
+static void init_t2fs() {
+    superblock = (t2fs_disk*) malloc(sizeof(*superblock));
+    readSuperblock();
     if (debug) {
-        show_superblock_info();
+        showSuperblockInfo();
     }
 }
 
