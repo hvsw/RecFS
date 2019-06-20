@@ -74,12 +74,11 @@ void showSuperblockInfo() {
 
 int debug = 1;
 
-static unsigned char readSector(unsigned char *buffer) {
+void readSector(unsigned char *buffer) {
     if (read_sector(0, buffer)) {
         printf("Erro ao ler o superbloco. O arquivo '%s' esta no caminho certo?\n", DISK_FILE);
         exit(-1);
     }
-    return buffer;
 }
 
 void populateSuperblockWith(BYTE *buffer) {
@@ -113,7 +112,7 @@ static void init_t2fs() {
 
 void superblockToBuffer(unsigned char *buffer) {
     memset(buffer, 0, sizeof(buffer));
-    
+
     sprintf(buffer,    "0x%x", VERSION);
     sprintf(buffer+2,  "0x%x", SECTOR_SIZE);
     sprintf(buffer+4,  "0x%x", superblock->partitionTableStart);
@@ -126,34 +125,34 @@ void superblockToBuffer(unsigned char *buffer) {
 int _format2() {
     int superblockSize = 40, dataAreaSize = BLOCK_SIZE, dirTreeSize, bitmapSize;
     int diskSize = superblockSize + dataAreaSize + dirTreeSize + bitmapSize;
+
     superblock->version = VERSION; // just in case...
     superblock->sectorSize = 0x100; // 0d256
     superblock->partitionTableStart = 0x8;
     superblock->partitionCount = 0x1;
     superblock->partitionStart = 0x28; // 0d40
-    
+
     int lastBlockAddress = diskSize - superblock->partitionStart - bitmapSize - dirTreeSize;
     superblock->partitionEnd = lastBlockAddress;
-    
     int partitionNameSize = 24;
     unsigned char buffer[partitionNameSize];
-    strncpy("PART_SEM_QUE_VEM", superblock->partitionName, sizeof(buffer));
-    
+    strncpy(superblock->partitionName, "PART_SEM_QUE_VEM", sizeof(buffer));  
     unsigned char superblockData[SECTOR_SIZE];
     superblockToBuffer(superblockData);
-    
+
     int writeResult = write_sector(0, superblockData);
     if (writeResult < 0) {
         return writeResult;
     }
-    
+
     return 0;
 }
 
 int wipeDisk() {
+
     unsigned char zeroFilledArray[SECTOR_SIZE];
     memset(zeroFilledArray, 0, SECTOR_SIZE);
-    
+
     int diskSize = 0;
     int numberOfSectors = diskSize/SECTOR_SIZE;
     int currentSector = 0;
@@ -163,7 +162,7 @@ int wipeDisk() {
             return writeResult;
         }
     }
-    
+
     return 0;
 }
 
@@ -173,17 +172,17 @@ int format2 (int sectors_per_block) {
         init_t2fs();
         diskInitialized = 1;
     }
-    
+
     int wipeDiskResult = wipeDisk();
     if (wipeDiskResult < 0) {
         return wipeDiskResult;
     }
-    
+
     int formatResult = _format2();
     if (formatResult < 0) {
         return formatResult;
     }
-    
+
     return 0;
 }
 
@@ -225,19 +224,19 @@ Função:	Função usada para realizar a leitura de uma certa quantidade
 -----------------------------------------------------------------------------*/
 int read2 (FILE2 handle, char *buffer, int size) {
     return -1;
-    
+
     FILE *diskFile = fopen(DISK_FILE, O_RDONLY);
-    
+
     // TODO: Encontrar o primeiro bloco do arquivo
     int fileFirstBlock = 0;
     fseek(diskFile, fileFirstBlock, SEEK_SET);
-    
+
     int numberOfSectorsToRead = size / SECTOR_SIZE;
     int remainder = size % SECTOR_SIZE;
     if (remainder != 0) { numberOfSectorsToRead++; }
-    
+
     unsigned long bytesRead = fread(buffer, SECTOR_SIZE, numberOfSectorsToRead, diskFile);
-    
+
     fclose(diskFile);
     return (int) bytesRead;
 }
