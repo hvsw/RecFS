@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include "sys/fcntl.h"
 #include "../include/apidisk.h"
+#include"tree.h"
+#include"RecFile.h
 
 
 #define MAX_FILES 1000
@@ -42,6 +44,10 @@ typedef struct  {
     DWORD   partitionEnd;
     char    partitionName[24];
 } t2fs_disk;
+
+RecFile workingDirectory;
+
+RecFile rootDirectory;
 
 t2fs_disk *superblock;
 
@@ -116,7 +122,7 @@ static int initIfNeeded() {
     }
 
     diskInitialized = 1;
-    return 1;
+    return 0;
 }
 
 void superblockToBuffer(BYTE *buffer) {
@@ -142,9 +148,6 @@ void superblockToBuffer(BYTE *buffer) {
 }
 
 int _format2() {
-
-    printf("INICIO FORMAT2\n");
-
     if (superblock != NULL) {
         free(superblock);
     }
@@ -152,21 +155,13 @@ int _format2() {
     superblock = (t2fs_disk*) malloc(sizeof(*superblock));
 
     superblock->version = VERSION; // just in case..
-    printf("VERSION\n");
     superblock->sectorSize = 0x100; // 0d256
-    printf("SECTOR_SIZE");
     superblock->partitionTableStart = 0x8;
-    printf("partitionTableStart\n");
     superblock->partitionCount = 0x1;
-    printf("partitionCount\n");
     superblock->partitionStart = 0x28; // 0d40
-
-    printf("ATRIBUICOES\n");
 
     int lastBlockAddress = DISK_SIZE - superblock->partitionStart - BITMAP_SIZE - DIRTREE_SIZE;
     superblock->partitionEnd = lastBlockAddress;
-
-    printf("lastBlockAddress\n");
     
     int partitionNameSize = 24;
     unsigned char buffer[partitionNameSize];
@@ -174,15 +169,11 @@ int _format2() {
     
     BYTE superblockData[SECTOR_SIZE];
     superblockToBuffer(superblockData);
-    printf("SUPERBLOCK\n");
 
     int writeResult = write_sector(0, superblockData);
-    printf("WRITE SECTOR\n");
     if (writeResult < 0) {
         return writeResult;
     }
-
-    printf("FORMAT2\n");
 
     return 0;
 }
@@ -199,8 +190,6 @@ int wipeDisk() {
             return writeResult;
         }
     }
-
-    printf("WIPOU\n");
 
     return 0;
 }
@@ -230,8 +219,50 @@ Função:	Função usada para criar um novo arquivo no disco e abrí-lo,
 		arquivo já existente, o mesmo terá seu conteúdo removido e
 		assumirá um tamanho de zero bytes.
 -----------------------------------------------------------------------------*/
+int fileExists(*filename){
+    return -1;
+}
+
+_create2(char *filename){
+
+}
+
 FILE2 create2 (char *filename) {
-	return -1;
+    if (strcmp(filename,"") ==0 || strcmp(filename,"/") ==0) {
+		return -1;
+    }
+    
+    int initResult = initIfNeeded();
+    if (initResult < 0) {
+        printf("Problemas na inicialização do disco\n");
+        return initResult;
+    }
+
+    int fileExistsResult = fileExists(filename);
+    switch(fileExistsResult){
+        case -1:
+            if(debug){
+                printf("Erro ao pesquisar arquivo na árvore\n");
+            }
+            return fileExistsResult;
+        case 1:
+            if(debug){
+                printf("Arquivo encontrado\n");
+            }
+            int deleteResult = delete2(filename);
+            if (deleteResult < 0) {
+                return deleteResult;
+            }
+            break;
+        default: break;
+    }
+
+    int create2Result = _create2(filename);
+    if(create2Result < 0) {
+        return create2Result;
+    }
+
+	return 0;
 }
 
 /*-----------------------------------------------------------------------------
