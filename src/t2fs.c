@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
+#include <stdlib.h>
 #include "sys/fcntl.h"
 #include "../include/apidisk.h"
 
@@ -12,16 +13,20 @@
 #define MAX_FILES 1000
 char *files[MAX_FILES];
 
-#define SECTOR_SIZE 256
 #define SECTORS_PER_BLOCK 256
-// TODO: Esse valor talvez seja um pouco grande,
-// foi escolhido esse pois geralmente arquivos de audio
-// em gravação tem um tamanho consideravel, sendo dificil
-// encontrar arquivos muito pequenos, acredito que poderiamos
-// ate aumentar pra sei la 1MB.
 #define BLOCK_SIZE SECTOR_SIZE * SECTORS_PER_BLOCK  // 64KB
 
 #define BLOCK_COUNT 100
+
+
+//TODO: Definir tam da arvore
+#define DIRTREE_SIZE 0
+    
+#define DATA_AREA_SIZE SECTOR_SIZE*1
+
+#define BITMAP_SIZE DATA_AREA_SIZE/8
+
+#define DISK_SIZE DATA_AREA_SIZE+40+BITMAP_SIZE+DIRTREE_SIZE
 
 #define DISK_FILE "../t2fs_disk.dat"
 
@@ -74,20 +79,13 @@ void showSuperblockInfo() {
 
 int debug = 1;
 
-void readSector(unsigned char *buffer) {
-    if (read_sector(0, buffer)) {
-        printf("Erro ao ler o superbloco. O arquivo '%s' esta no caminho certo?\n", DISK_FILE);
-        exit(-1);
-    }
-}
-
 void populateSuperblockWith(BYTE *buffer) {
-    superblock->version = *((WORD *)buffer);
-    if (superblock->version != VERSION) {
-        printf("Versão do sistema de arquivos não suportada!\nEsperado: %d\nEncontrado: 0x%hu\n", VERSION, superblock->version);
-        exit(-2);
+    if (*((WORD *)buffer) != VERSION) {
+      printf("Versão do sistema de arquivos não suportada!\nEsperado: %d\nEncontrado: 0x%hu\n", VERSION, superblock->version);
+      exit(-2);
     }
     
+    superblock->version = *((WORD *)buffer);
     superblock->sectorSize = *((WORD *)(buffer + 2));
     superblock->partitionTableStart = *((WORD *)(buffer + 4));
     superblock->partitionCount = *((WORD *)(buffer + 6));
@@ -96,83 +94,119 @@ void populateSuperblockWith(BYTE *buffer) {
     strncpy(superblock->partitionName, buffer+16, 24);
 }
 
-void readSuperblock() {
+int readSuperblockFromDisk() {
     BYTE buffer[SECTOR_SIZE];
-    readSector(buffer);
-    populateSuperblockWith(buffer);
-}
-
-static void init_t2fs() {
-    superblock = (t2fs_disk*) malloc(sizeof(*superblock));
-    readSuperblock();
-    if (debug) {
-        showSuperblockInfo();
+    int resultRead = read_sector(0, buffer);
+    if (resultRead < 0) {
+        return resultRead;
     }
+    populateSuperblockWith(buffer);
+    return 0;
 }
 
-void superblockToBuffer(unsigned char *buffer) {
-    memset(buffer, 0, sizeof(buffer));
+static int initIfNeeded() {
+    if (diskInitialized) {
+        return 1;
+    }
 
-    sprintf(buffer,    "0x%x", VERSION);
-    sprintf(buffer+2,  "0x%x", SECTOR_SIZE);
-    sprintf(buffer+4,  "0x%x", superblock->partitionTableStart);
-    sprintf(buffer+6,  "0x%x", superblock->partitionCount);
-    sprintf(buffer+8,  "0x%x", superblock->partitionStart);
-    sprintf(buffer+12, "0x%x", superblock->partitionEnd);
-    sprintf(buffer+16, "0x%x", superblock->partitionName);
+    superblock = (t2fs_disk*) malloc(sizeof(*superblock));
+    int readSuperblockResult = readSuperblockFromDisk();
+    if (readSuperblockResult < 0) {
+        return readSuperblockResult;
+    }
+
+    diskInitialized = 1;
+    return 1;
+}
+
+void superblockToBuffer(BYTE *buffer) {
+    memset(buffer, 0, SECTOR_SIZE);
+    int version = VERSION;
+    int sectorSize = SECTOR_SIZE;
+
+    int i=0;
+    for(;i<SECTOR_SIZE;i++){
+        printf("%d", buffer[i]);
+    }
+
+
+    memcpy(buffer,    &version, sizeof(WORD));
+    memcpy(buffer+2,  &sectorSize, sizeof(WORD));
+    memcpy(buffer+4,  &superblock->partitionTableStart, sizeof(WORD));
+    memcpy(buffer+6,  &superblock->partitionCount, sizeof(WORD));
+    memcpy(buffer+8,  &superblock->partitionStart, sizeof(DWORD));
+    memcpy(buffer+12, &superblock->partitionEnd, sizeof(DWORD));
+    memcpy(buffer+16, superblock->partitionName, 24);
+
+
 }
 
 int _format2() {
-    int superblockSize = 40, dataAreaSize = BLOCK_SIZE, dirTreeSize, bitmapSize;
-    int diskSize = superblockSize + dataAreaSize + dirTreeSize + bitmapSize;
 
-    superblock->version = VERSION; // just in case...
+    printf("INICIO FORMAT2\n");
+
+    if (superblock != NULL) {
+        free(superblock);
+    }
+
+    superblock = (t2fs_disk*) malloc(sizeof(*superblock));
+
+    superblock->version = VERSION; // just in case..
+    printf("VERSION\n");
     superblock->sectorSize = 0x100; // 0d256
+    printf("SECTOR_SIZE");
     superblock->partitionTableStart = 0x8;
+    printf("partitionTableStart\n");
     superblock->partitionCount = 0x1;
+    printf("partitionCount\n");
     superblock->partitionStart = 0x28; // 0d40
 
-    int lastBlockAddress = diskSize - superblock->partitionStart - bitmapSize - dirTreeSize;
+    printf("ATRIBUICOES\n");
+
+    int lastBlockAddress = DISK_SIZE - superblock->partitionStart - BITMAP_SIZE - DIRTREE_SIZE;
     superblock->partitionEnd = lastBlockAddress;
+
+    printf("lastBlockAddress\n");
+    
     int partitionNameSize = 24;
     unsigned char buffer[partitionNameSize];
     strncpy(superblock->partitionName, "PART_SEM_QUE_VEM", sizeof(buffer));  
-    unsigned char superblockData[SECTOR_SIZE];
+    
+    BYTE superblockData[SECTOR_SIZE];
     superblockToBuffer(superblockData);
+    printf("SUPERBLOCK\n");
 
     int writeResult = write_sector(0, superblockData);
+    printf("WRITE SECTOR\n");
     if (writeResult < 0) {
         return writeResult;
     }
+
+    printf("FORMAT2\n");
 
     return 0;
 }
 
 int wipeDisk() {
-
-    unsigned char zeroFilledArray[SECTOR_SIZE];
+    BYTE zeroFilledArray[SECTOR_SIZE];
     memset(zeroFilledArray, 0, SECTOR_SIZE);
 
-    int diskSize = 0;
-    int numberOfSectors = diskSize/SECTOR_SIZE;
+    int numberOfSectors = DISK_SIZE/SECTOR_SIZE;
     int currentSector = 0;
     for (currentSector = 0; currentSector < numberOfSectors; currentSector++) {
-        int writeResult = write_sector(currentSector, zeroFilledArray) < 0;
+        int writeResult = write_sector(currentSector, zeroFilledArray);
         if (writeResult < 0) {
             return writeResult;
         }
     }
+
+    printf("WIPOU\n");
 
     return 0;
 }
 
 
 int format2 (int sectors_per_block) {
-	if (!diskInitialized) {
-        init_t2fs();
-        diskInitialized = 1;
-    }
-
     int wipeDiskResult = wipeDisk();
     if (wipeDiskResult < 0) {
         return wipeDiskResult;
@@ -182,6 +216,9 @@ int format2 (int sectors_per_block) {
     if (formatResult < 0) {
         return formatResult;
     }
+
+    readSuperblockFromDisk();
+    showSuperblockInfo();
 
     return 0;
 }
