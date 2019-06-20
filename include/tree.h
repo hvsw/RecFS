@@ -1,16 +1,18 @@
-#include<stdio.h>
-#include<stdlib.h>
-#include"RecFile.h"
+#include <stdio.h>
+#include <stdlib.h>
 
-struct tree{
+#ifndef INCLUDE_TREE
+
+#include "RecFile.h"
+#define INCLUDE_TREE
+
+struct tree {
     struct RecFile file;
     struct tree *children ;
 };
 
-void preorder(struct tree*p);
+#endif
 
-struct tree* search(struct tree* root,int data);
-
-struct tree* createNode(int data);
-
-struct tree* createnary(struct tree* root,int data[]);
+//struct tree* search(struct tree* root, RecFile data);
+//struct tree* createNode(int data);
+//struct tree* createnary(struct tree* root,int data[]);

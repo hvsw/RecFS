@@ -8,8 +8,8 @@
 #include <stdlib.h>
 #include "sys/fcntl.h"
 #include "../include/apidisk.h"
-#include"tree.h"
-#include"RecFile.h
+#include "../include/tree.h"
+#include "../include/RecFile.h"
 
 
 #define MAX_FILES 1000
@@ -53,6 +53,9 @@ t2fs_disk *superblock;
 
 int bitmap[BLOCK_COUNT];
 
+#define OPENED_FILES_LIMIT 20
+struct tree openedFiles[OPENED_FILES_LIMIT];
+
 #pragma pack(push, 1)
 
 int diskInitialized = 0;
@@ -61,7 +64,7 @@ int diskInitialized = 0;
 Função:	Informa a identificação dos desenvolvedores do T2FS.
 -----------------------------------------------------------------------------*/
 int identify2 (char *name, int size) {
-    strncpy (name, "Álvaro Souza - \nHenrique Valcanaia - 240501\nLucas Bauer - 237054\nLucas Lauck - 285688\n", size);
+    strncpy (name, "Álvaro Souza - 231162\nHenrique Valcanaia - 240501\nLucas Bauer - 237054\nLucas Lauck - 285688\n", size);
     return 0;
 }
 
@@ -223,8 +226,8 @@ int fileExists(*filename){
     return -1;
 }
 
-_create2(char *filename){
-
+int _create2(char *filename){
+    return -1;
 }
 
 FILE2 create2 (char *filename) {
@@ -313,8 +316,30 @@ int read2 (FILE2 handle, char *buffer, int size) {
 Função:	Função usada para realizar a escrita de uma certa quantidade
 		de bytes (size) de  um arquivo.
 -----------------------------------------------------------------------------*/
+#define ERROR_INVALID_HANDLE -1
 int write2 (FILE2 handle, char *buffer, int size) {
-	return -1;
+    int isValidHandle = (handle > 0) && (handle < OPENED_FILES_LIMIT-1);
+    if (!isValidHandle) {
+        return ERROR_INVALID_HANDLE;
+    }
+    
+    struct tree file = openedFiles[handle];
+    int fileSectorOffset = file.file.startingBlock * SECTORS_PER_BLOCK;
+    
+    int numberOfSectorsNeeded = size / SECTOR_SIZE;
+    int remainder = size % SECTOR_SIZE;
+    if (remainder != 0) { numberOfSectorsNeeded++; }
+    
+    int fileSectorIndex;
+    for (fileSectorIndex = 0; fileSectorIndex < numberOfSectorsNeeded; fileSectorIndex++) {
+        int sectorOffset = fileSectorOffset + fileSectorIndex * SECTOR_SIZE;
+        int writeSectorResult = write_sector(fileSectorIndex, buffer + sectorOffset);
+        if (!writeSectorResult) {
+            return writeSectorResult;
+        }
+    }
+    
+	return 0;
 }
 
 /*-----------------------------------------------------------------------------
