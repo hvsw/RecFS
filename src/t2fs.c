@@ -45,6 +45,14 @@ typedef struct  {
 
 t2fs_disk *superblock;
 
+/* path atual */
+typedef struct currp {
+    char* absolute;
+    int clusterNo;
+} CURRENT_PATH;
+
+CURRENT_PATH currentPath;
+//////////////
 int bitmap[BLOCK_COUNT];
 
 #pragma pack(push, 1)
@@ -220,6 +228,12 @@ int format2 (int sectors_per_block) {
     readSuperblockFromDisk();
     showSuperblockInfo();
 
+    currentPath.absolute = malloc(sizeof(char)*5); // Valor inicial arbitrario
+    strcpy(currentPath.absolute, "/");
+    currentPath.clusterNo = 590;
+
+    printf("%s\n",currentPath.absolute );
+
     return 0;
 }
 
@@ -327,7 +341,14 @@ int chdir2 (char *pathname) {
 Função:	Função usada para obter o caminho do diretório corrente.
 -----------------------------------------------------------------------------*/
 int getcwd2 (char *pathname, int size) {
-	return -1;
+  if((strlen(currentPath.absolute) + 1) > size){
+		return -1;
+	}
+	else{
+		memset(pathname,'\0',size);
+		strcpy(pathname, currentPath.absolute);
+		return 0;
+	}
 }
 
 /*-----------------------------------------------------------------------------
