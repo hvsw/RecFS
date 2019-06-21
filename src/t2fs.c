@@ -54,6 +54,7 @@ t2fs_disk *superblock;
 int bitmap[BLOCK_COUNT];
 
 #define OPENED_FILES_LIMIT 20
+int openedFilesNumber = 0;
 struct tree openedFiles[OPENED_FILES_LIMIT];
 
 #pragma pack(push, 1)
@@ -318,7 +319,7 @@ Função:	Função usada para realizar a escrita de uma certa quantidade
 -----------------------------------------------------------------------------*/
 #define ERROR_INVALID_HANDLE -1
 int write2 (FILE2 handle, char *buffer, int size) {
-    int isValidHandle = (handle > 0) && (handle < OPENED_FILES_LIMIT-1);
+    int isValidHandle = (handle > 0) && (handle < OPENED_FILES_LIMIT-1) && (handle < openedFilesNumber-1);
     if (!isValidHandle) {
         return ERROR_INVALID_HANDLE;
     }
