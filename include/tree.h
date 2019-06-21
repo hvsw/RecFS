@@ -11,6 +11,8 @@ struct tree {
     struct tree *children ;
 };
 
+typedef struct tree tree;
+
 #endif
 
 //struct tree* search(struct tree* root, RecFile data);

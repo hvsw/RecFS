@@ -55,7 +55,11 @@ int bitmap[BLOCK_COUNT];
 
 #define OPENED_FILES_LIMIT 20
 int openedFilesNumber = 0;
-struct tree openedFiles[OPENED_FILES_LIMIT];
+tree openedFiles[OPENED_FILES_LIMIT];
+#define ERROR_INVALID_HANDLE -1
+int isValidHandle(int handle) {
+    return (handle > 0) && (handle < OPENED_FILES_LIMIT-1) && (handle < openedFilesNumber-1);
+}
 
 #pragma pack(push, 1)
 
@@ -276,18 +280,35 @@ int delete2 (char *filename) {
 	return -1;
 }
 
+RecFile getFileFromPath(char *filename) {
+    RecFile file;
+    memcpy(&file.name, "mocked file", 11);
+    file.size = 100;
+    file.startingBlock = 0;
+    file.type = RECFILE_TYPE_FILE;
+    return file;
+}
+
 /*-----------------------------------------------------------------------------
 Função:	Função que abre um arquivo existente no disco.
 -----------------------------------------------------------------------------*/
 FILE2 open2 (char *filename) {
-	return -1;
+    RecFile file = getFileFromPath(filename);
+    openedFiles[openedFilesNumber++] = file;
+	return openedFilesNumber;
 }
 
 /*-----------------------------------------------------------------------------
 Função:	Função usada para fechar um arquivo.
 -----------------------------------------------------------------------------*/
 int close2 (FILE2 handle) {
-	return -1;
+    if (!isValidHandle(handle)) {
+        return ERROR_INVALID_HANDLE;
+    }
+    free(&openedFiles[openedFilesNumber]);
+    openedFilesNumber--;
+    
+	return 0;
 }
 
 /*-----------------------------------------------------------------------------
@@ -317,10 +338,8 @@ int read2 (FILE2 handle, char *buffer, int size) {
 Função:	Função usada para realizar a escrita de uma certa quantidade
 		de bytes (size) de  um arquivo.
 -----------------------------------------------------------------------------*/
-#define ERROR_INVALID_HANDLE -1
 int write2 (FILE2 handle, char *buffer, int size) {
-    int isValidHandle = (handle > 0) && (handle < OPENED_FILES_LIMIT-1) && (handle < openedFilesNumber-1);
-    if (!isValidHandle) {
+    if (!isValidHandle(handle)) {
         return ERROR_INVALID_HANDLE;
     }
     
