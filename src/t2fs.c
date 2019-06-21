@@ -280,20 +280,24 @@ int delete2 (char *filename) {
 	return -1;
 }
 
-RecFile getFileFromPath(char *filename) {
+tree getFileFromPath(char *filename) {
     RecFile file;
     memcpy(&file.name, "mocked file", 11);
     file.size = 100;
     file.startingBlock = 0;
     file.type = RECFILE_TYPE_FILE;
-    return file;
+    
+    tree tree;
+    tree.file = file;
+    
+    return tree;
 }
 
 /*-----------------------------------------------------------------------------
 Função:	Função que abre um arquivo existente no disco.
 -----------------------------------------------------------------------------*/
 FILE2 open2 (char *filename) {
-    RecFile file = getFileFromPath(filename);
+    tree file = getFileFromPath(filename);
     openedFiles[openedFilesNumber++] = file;
 	return openedFilesNumber;
 }
