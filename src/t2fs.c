@@ -42,6 +42,8 @@ typedef struct  {
     WORD    partitionCount;
     DWORD   partitionStart; // temos apenas 1 particao
     DWORD   partitionEnd;
+    WORD    rootBlock;
+    WORD    bitmapBlock;
     char    partitionName[24];
 } t2fs_disk;
 
@@ -89,6 +91,8 @@ void showSuperblockInfo() {
     printf("Partition start: 0x%x\n", superblock->partitionStart);
     printf("Partition end: 0x%x\n", superblock->partitionEnd);
     printf("Partition name: %s\n", superblock->partitionName);
+    printf("Bloco root: 0x%x\n", superblock->rootBlock);
+    printf("Bloco bitmap: 0x%x\n", superblock->bitmapBlock);
 }
 
 int debug = 1;
@@ -106,6 +110,11 @@ void populateSuperblockWith(BYTE *buffer) {
     superblock->partitionStart = *((DWORD *)(buffer + 8));
     superblock->partitionEnd = *((DWORD *)(buffer + 12));
     strncpy(superblock->partitionName, buffer+16, 24);
+    superblock->rootBlock = *((WORD *)(buffer + 41));
+    superblock->bitmapBlock = *((WORD *)(buffer + 43));
+
+    printf("ROOTBLOCK populate:\n", superblock->rootBlock);
+    printf("BITMAP populate:\n", superblock->rootBlock);
 }
 
 int readSuperblockFromDisk() {
@@ -118,6 +127,28 @@ int readSuperblockFromDisk() {
     return 0;
 }
 
+int readBitmapFromDisk(){
+    int numberOfSectorsToRead = sizeof(bitmap) / SECTOR_SIZE;
+    int remainder = sizeof(bitmap) % SECTOR_SIZE;
+    if (remainder != 0) { numberOfSectorsToRead++; }
+
+    int bitmapFirstSector = superblock->bitmapBlock * SECTORS_PER_BLOCK;
+    int bitmapLastSector = bitmapFirstSector + numberOfSectorsToRead;
+    int sectorIndex, resultRead;
+    BYTE buffer[SECTOR_SIZE];
+
+    for(sectorIndex = bitmapFirstSector; sectorIndex<bitmapLastSector; sectorIndex++){
+        resultRead = read_sector(sectorIndex, buffer);
+        if (resultRead < 0) {
+            return resultRead;
+        }
+        int i;
+        for(i=0; i<SECTOR_SIZE/sizeof(int); i++){
+            bitmap[i] = buffer[i];
+        }
+    }
+}
+
 static int initIfNeeded() {
     if (diskInitialized) {
         return 1;
@@ -128,6 +159,8 @@ static int initIfNeeded() {
     if (readSuperblockResult < 0) {
         return readSuperblockResult;
     }
+
+    readBitmapFromDisk();
 
     diskInitialized = 1;
     return 0;
@@ -151,7 +184,8 @@ void superblockToBuffer(BYTE *buffer) {
     memcpy(buffer+8,  &superblock->partitionStart, sizeof(DWORD));
     memcpy(buffer+12, &superblock->partitionEnd, sizeof(DWORD));
     memcpy(buffer+16, superblock->partitionName, 24);
-
+    memcpy(buffer+41, &superblock->rootBlock, sizeof(WORD));
+    memcpy(buffer+43, &superblock->bitmapBlock, sizeof(WORD));
 
 }
 
@@ -166,7 +200,7 @@ int _format2() {
     superblock->sectorSize = 0x100; // 0d256
     superblock->partitionTableStart = 0x8;
     superblock->partitionCount = 0x1;
-    superblock->partitionStart = 0x28; // 0d40
+    superblock->partitionStart = 0x28; // 0d40 
 
     int lastBlockAddress = DISK_SIZE - superblock->partitionStart - BITMAP_SIZE - DIRTREE_SIZE;
     superblock->partitionEnd = lastBlockAddress;
@@ -174,6 +208,8 @@ int _format2() {
     int partitionNameSize = 24;
     unsigned char buffer[partitionNameSize];
     strncpy(superblock->partitionName, "PART_SEM_QUE_VEM", sizeof(buffer));  
+    superblock->rootBlock = 0x29;
+    superblock->bitmapBlock = 0x2b;
     
     BYTE superblockData[SECTOR_SIZE];
     superblockToBuffer(superblockData);
@@ -227,7 +263,7 @@ Função:	Função usada para criar um novo arquivo no disco e abrí-lo,
 		arquivo já existente, o mesmo terá seu conteúdo removido e
 		assumirá um tamanho de zero bytes.
 -----------------------------------------------------------------------------*/
-int fileExists(*filename){
+int fileExists(char *filename){
     return -1;
 }
 
@@ -320,22 +356,29 @@ Função:	Função usada para realizar a leitura de uma certa quantidade
 		de bytes (size) de um arquivo.
 -----------------------------------------------------------------------------*/
 int read2 (FILE2 handle, char *buffer, int size) {
-    return -1;
-
-    FILE *diskFile = fopen(DISK_FILE, O_RDONLY);
-
+    if (!isValidHandle(handle)) {
+        return ERROR_INVALID_HANDLE;
+    }
     // TODO: Encontrar o primeiro bloco do arquivo
     int fileFirstBlock = 0;
-    fseek(diskFile, fileFirstBlock, SEEK_SET);
+
+    struct tree file = openedFiles[handle];
+    int fileSectorOffset = file.file.startingBlock * SECTORS_PER_BLOCK;
 
     int numberOfSectorsToRead = size / SECTOR_SIZE;
     int remainder = size % SECTOR_SIZE;
     if (remainder != 0) { numberOfSectorsToRead++; }
 
-    unsigned long bytesRead = fread(buffer, SECTOR_SIZE, numberOfSectorsToRead, diskFile);
+    int fileSectorIndex;
+    for (fileSectorIndex = 0; fileSectorIndex < numberOfSectorsToRead; fileSectorIndex++) {
+        int sectorOffset = fileSectorOffset + fileSectorIndex * SECTOR_SIZE;
+        int readSectorResult = read_sector(sectorOffset, buffer + fileSectorIndex);
+        if (!readSectorResult) {
+            return readSectorResult;
+        }
+    }
 
-    fclose(diskFile);
-    return (int) bytesRead;
+    return size;
 }
 
 /*-----------------------------------------------------------------------------
@@ -357,13 +400,13 @@ int write2 (FILE2 handle, char *buffer, int size) {
     int fileSectorIndex;
     for (fileSectorIndex = 0; fileSectorIndex < numberOfSectorsNeeded; fileSectorIndex++) {
         int sectorOffset = fileSectorOffset + fileSectorIndex * SECTOR_SIZE;
-        int writeSectorResult = write_sector(fileSectorIndex, buffer + sectorOffset);
+        int writeSectorResult = write_sector(sectorOffset, buffer + fileSectorIndex);
         if (!writeSectorResult) {
             return writeSectorResult;
         }
     }
     
-	return 0;
+	return size;
 }
 
 /*-----------------------------------------------------------------------------
