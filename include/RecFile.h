@@ -17,6 +17,7 @@ struct RecFile {
     
     int startingBlock;
     int size;
+    DWORD pointer;
 };
 
 typedef struct RecFile RecFile;
